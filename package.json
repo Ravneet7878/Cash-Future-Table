@@ -1,0 +1,21 @@
+{
+  "name": "cash-future-table",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm --filter @cash-future/backend build",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "pnpm --filter @cash-future/backend lint",
+    "test": "pnpm --filter @cash-future/backend test",
+    "typecheck": "pnpm --filter @cash-future/backend typecheck"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}
