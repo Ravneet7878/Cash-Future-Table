@@ -3,6 +3,7 @@ import type { Server } from 'node:http';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { importContracts } from './contract-importer.js';
+import { loadContractUniverse } from './contract-universe.js';
 import { createDatabase } from './database.js';
 import { startHttpServer } from './http-server.js';
 import { createLogger } from './logger.js';
@@ -49,6 +50,8 @@ async function main(): Promise<void> {
   try {
     await runMigrations(database, logger);
     await importContracts(database, config, logger);
+    const contractUniverse = await loadContractUniverse(database);
+    logger.info({ rows: contractUniverse.length }, 'contract universe loaded');
     const app = createApp({ database, logger });
     server = await startHttpServer(app, config.PORT, config.HOST);
     logger.info({ host: config.HOST, port: config.PORT }, 'server listening');

@@ -104,14 +104,16 @@ Use symbol as the stable row ID. Apply deltas through AG Grid transactions. Form
 - The grid has exactly the five specified columns.
 - Review checkpoint after every component.
 
-## Current Component 2 runtime contract
+## Current Component 3 runtime contract
 
 Configuration is validated before startup. `DATA_DIR` must be absolute, and contract filenames must be plain filenames without directory traversal. Startup runs checksum-protected migrations, parses both files, atomically replaces both stored market segments in bounded batches, and starts HTTP only after import commits. Logs report counts without the external directory path.
 
-`app.contracts` stores `market`, `token`, `instrument_type`, `symbol`, nullable `expiry_date`, and `contract_name`. Its primary key is `(market, token)`, with an index on `(symbol, instrument_type, expiry_date)` for the next component's universe query.
+`app.contracts` stores `market`, `token`, `instrument_type`, `symbol`, nullable `expiry_date`, and `contract_name`. Its primary key is `(market, token)`, with an index on `(symbol, instrument_type, expiry_date)` used by the universe query.
+
+`app.contract_universe` ranks FUTSTK contracts per symbol by absolute ascending expiry and then token, retains one deterministic minimum-expiry future, and joins it to NSECM EQUITY by exact symbol. The service returns symbol-ordered, read-only `{ symbol, cashToken, futureToken, futureExpiry }` entries. Startup validates positive safe-integer tokens, ISO dates, symbol uniqueness, exactly 228 rows, and exactly 18 symbols ending in `NSETEST` before HTTP listens.
 
 Secrets exist only in ignored `.env` or deployment secret injection. `.env.example`, Compose, source, tests, and documentation contain no real credentials.
 
-## Component 2 exclusions
+## Component 3 exclusions
 
-Component 2 does not select the 228-row contract universe, parse market-data files, create workers, hold quotes, calculate spreads, implement WebSockets/replay, or add frontend code.
+Component 3 does not parse market-data files, create workers, hold quotes, calculate spreads, implement WebSockets/replay, or add frontend code.

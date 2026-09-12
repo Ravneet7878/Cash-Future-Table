@@ -1,6 +1,6 @@
 # Cash–Future Table
 
-Components 1 and 2 provide the TypeScript/Express backend foundation, PostgreSQL development stack, and atomic startup ingestion of external NSE contract reference files. Contract-universe selection, market replay, WebSockets, and the frontend are intentionally deferred to later reviewed checkpoints.
+Components 1–3 provide the TypeScript/Express backend foundation, PostgreSQL development stack, atomic startup ingestion of external NSE contract reference files, and the verified 228-row cash/future contract universe. Market replay, WebSockets, and the frontend are intentionally deferred to later reviewed checkpoints.
 
 ## Requirements
 
@@ -52,9 +52,16 @@ Startup performs this sequence before accepting HTTP traffic:
 2. Connect to PostgreSQL and apply checksum-protected SQL migrations.
 3. Stream and validate both external contract files.
 4. Replace both stored market segments in one transaction using bounded insert batches.
-5. Start the Express server only after the import commits.
+5. Load and validate the 228-row cash/future contract universe.
+6. Start the Express server only after the import and universe validation succeed.
 
 Malformed input reports its filename and line. Parsing or database failure leaves previously committed contracts intact and prevents the HTTP server from becoming ready.
+
+## Contract universe
+
+The `app.contract_universe` PostgreSQL view ranks NSEFO `FUTSTK` contracts independently for each symbol by expiry date, selects the absolute minimum expiry, and joins it to the exact NSECM `EQUITY` symbol. Expiry selection is deliberately not relative to the current date. If two futures have the same minimum expiry, the lower token is the deterministic tie-breaker.
+
+The backend service exposes each row as a read-only `{ symbol, cashToken, futureToken, futureExpiry }` entry ordered by symbol. Startup rejects malformed tokens or dates, duplicate symbols, any row count other than 228, or any result that does not contain exactly 18 symbols ending in `NSETEST`. The supplied files produce 228 unique rows, including all 18 test symbols.
 
 ## Container workflow
 
@@ -84,11 +91,16 @@ To run the supplied-file count test explicitly:
 DATA_DIR=/absolute/path/to/external/data pnpm --filter @cash-future/backend test -- supplied-contracts.test.ts
 ```
 
+The PostgreSQL-backed universe integration test runs when `DATABASE_URL` is set:
+
+```sh
+DATABASE_URL=postgresql://... DATA_DIR=/absolute/path/to/external/data pnpm --filter @cash-future/backend test
+```
+
 See [the project specification](docs/PROJECT_SPEC.md) for the approved nine-component plan and [the progress log](docs/PROGRESS.md) for checkpoint evidence.
 
 ## Current limitations
 
-- No 228-row cash/future universe query yet.
 - No market-data parsing, workers, price state, or spread calculations.
 - No WebSocket server or replay lifecycle.
 - No React/AG Grid frontend.

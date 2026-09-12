@@ -29,5 +29,26 @@ describe.runIf(dataDirectory !== undefined)('supplied contract files', () => {
     expect(cash).toHaveLength(4_433);
     expect(futures).toHaveLength(647);
     expect(new Set(keys).size).toBe(keys.length);
+
+    const cashSymbols = new Set(cash.map((contract) => contract.symbol));
+    const selectedFutures = new Map<string, (typeof futures)[number]>();
+    const orderedFutures = futures
+      .filter((contract) => cashSymbols.has(contract.symbol))
+      .sort(
+        (left, right) =>
+          (left.expiryDate ?? '').localeCompare(right.expiryDate ?? '') ||
+          left.token - right.token,
+      );
+    for (const contract of orderedFutures) {
+      if (!selectedFutures.has(contract.symbol)) {
+        selectedFutures.set(contract.symbol, contract);
+      }
+    }
+    const selectedSymbols = [...selectedFutures.keys()];
+
+    expect(selectedFutures).toHaveLength(228);
+    expect(
+      selectedSymbols.filter((symbol) => symbol.endsWith('NSETEST')),
+    ).toHaveLength(18);
   });
 });
