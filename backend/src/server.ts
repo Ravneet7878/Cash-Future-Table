@@ -2,7 +2,9 @@ import type { Server } from 'node:http';
 
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
+import { importContracts } from './contract-importer.js';
 import { createDatabase } from './database.js';
+import { startHttpServer } from './http-server.js';
 import { createLogger } from './logger.js';
 import { runMigrations } from './migrations.js';
 
@@ -46,10 +48,10 @@ async function main(): Promise<void> {
 
   try {
     await runMigrations(database, logger);
+    await importContracts(database, config, logger);
     const app = createApp({ database, logger });
-    server = app.listen(config.PORT, config.HOST, () => {
-      logger.info({ host: config.HOST, port: config.PORT }, 'server listening');
-    });
+    server = await startHttpServer(app, config.PORT, config.HOST);
+    logger.info({ host: config.HOST, port: config.PORT }, 'server listening');
   } catch (error) {
     logger.fatal({ err: error }, 'backend startup failed');
     await database.end().catch(() => undefined);

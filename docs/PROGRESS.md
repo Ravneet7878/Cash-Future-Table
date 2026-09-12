@@ -2,38 +2,57 @@
 
 ## Current checkpoint
 
-Component 1 — backend foundation (implemented and verified on 2026-09-12).
+Component 2 — contract ingestion (implemented and verified on 2026-09-13). Stop before Component 3 pending user review.
 
-## Included
+## Component 1 review corrections
 
-- Greenfield pnpm workspace and backend package.
-- Strict TypeScript, Express, validated environment configuration, Pino JSON logging.
-- PostgreSQL pooling and automatic checksum-protected transactional SQL migrations.
-- Liveness/readiness endpoints, centralized JSON errors, request IDs, graceful shutdown.
-- ESLint, Prettier, Vitest, build configuration, backend Dockerfile, and PostgreSQL/backend Compose services.
-- Durable project scope and staged component plan.
+- Restored the approved nine-component plan and all fixed technical rules in `docs/PROJECT_SPEC.md`, including exactly 228 rows, all 18 `NSETEST` symbols, absolute minimum expiry, paise scaling, zero bid/ask as `null`, newest timestamp/later-row tie-breaking, two workers, first-client replay, one-second deltas, final-state retention, and the five exact grid columns.
+- Added direct migration-runner tests for ordered execution, matching-checksum skipping, checksum mismatch rejection, transactional rollback, advisory-lock release, and client release.
+- Changed HTTP startup to await the actual `listening` event and reject asynchronous listen errors before startup is considered successful.
+- Confirmed and fixed the pnpm 11 deploy defect by enabling `injectWorkspacePackages: true`; clean `pnpm deploy` and the backend Docker image now build successfully without a legacy fallback.
+- Added `.pnpm-store` to formatter exclusions so local package-cache contents are never traversed.
+
+## Component 2 behavior
+
+- Validates an absolute `DATA_DIR` and traversal-safe configurable contract filenames, with the two supplied names as defaults.
+- Streams headerless files line by line and requires exactly 14 whitespace-delimited fields.
+- Retains only NSECM `EQUITY` and NSEFO `FUTSTK` records and rejects duplicate selected tokens.
+- Converts NSECM expiry `-1` to `NULL` and FUTSTK epoch seconds to a UTC `YYYY-MM-DD` date.
+- Stores `market`, `token`, `instrument_type`, `symbol`, nullable `expiry_date`, and `contract_name` in `app.contracts` with primary key `(market, token)` and index `(symbol, instrument_type, expiry_date)`.
+- Parses both files before database mutation, then replaces both segments in one transaction using batches of at most 500 rows. Any parse or insert failure leaves the prior committed dataset intact.
+- Runs migrations, then contract import, then starts HTTP. Import failure prevents the service from listening.
+- Logs only cash/future/total counts in the successful import summary; it does not log the host data-directory path.
+- Mounts the external host `DATA_DIR` at `/data` read-only for the backend container. No source data is copied into Git or the Docker image.
+
+## Verification evidence
+
+- `pnpm format:check`: passed.
+- `pnpm lint`: passed with zero errors or warnings.
+- `pnpm typecheck`: passed under strict TypeScript settings.
+- Full supplied-file `pnpm test`: 7 files passed, 19 tests passed. Coverage includes configuration, parsing/filtering/expiry conversion, filename-and-line errors, duplicates, transactional rollback, repeat-import stability, migration behavior, listen errors, health routes, and exact full-file counts.
+- Supplied source validation: 4,433 NSECM `EQUITY` records, 647 NSEFO `FUTSTK` records, and zero duplicate `(market, token)` keys.
+- `pnpm build`: passed.
+- Clean local-filesystem snapshot `pnpm check`: passed end to end with the supplied `DATA_DIR`, covering formatting, lint, strict typecheck, all 19 tests, and production build.
+- Clean `pnpm deploy --filter @cash-future/backend --prod <temporary-directory>`: passed with 97 production packages.
+- `docker compose config --quiet`: passed.
+- `docker compose build backend`: passed, including frozen install, TypeScript build, modern pnpm deploy, and runtime-image assembly.
+- Live Compose startup: PostgreSQL and backend both healthy; two migrations applied; startup import logged 4,433 cash, 647 futures, and 5,080 total contracts.
+- PostgreSQL validation: `NSECM=4433`, `NSEFO=647`, zero duplicate keys, and two migration records.
+- Live schema validation: `contracts_pkey` and `contracts_symbol_instrument_expiry_idx` both exist.
+- Runtime health: `/health/live` and `/health/ready` returned HTTP 200 payloads.
+- Repeat-import integration check: backend restart re-imported 5,080 contracts; ordered dataset digest remained `2fd6cb53bda88b15263ea81aa1e59846` before and after.
+- Failure integration check: an isolated backend with an intentionally missing cash filename exited with a filename/line startup error; the prior PostgreSQL count and digest remained unchanged, and the primary backend stayed ready.
+- Secret policy: `.env` is ignored and untracked; tracked configuration uses environment interpolation and contains no credential-bearing connection URL, private key, or common API-token literal.
 
 ## Deliberately deferred
 
-- External contract ingestion and any raw-data access.
-- Market-domain schema and APIs.
-- WebSockets and market replay.
-- Frontend package or source code.
+- Component 3 absolute-minimum-expiry cash/future universe query and exact 228-row validation.
+- Market-data parsing, worker threads, quote state, price conversion, timestamp ordering, and spreads.
+- WebSocket protocol, replay lifecycle, snapshots, and one-second deltas.
+- React/Vite/AG Grid frontend and the five-column table.
+- Complete three-service Docker integration and final end-to-end QA.
+- Order execution and trading functionality are not implemented and are not part of the project.
 
-## Verification
+## Operational note
 
-- `pnpm format:check`: passed; every tracked source/configuration/documentation file matches Prettier formatting.
-- `pnpm lint`: passed with zero ESLint errors or warnings.
-- `pnpm typecheck`: passed under the strict TypeScript configuration.
-- `pnpm test`: passed; 2 test files and 6 tests covering configuration validation, liveness, database readiness success/failure, and JSON 404 errors.
-- `pnpm build`: passed; production ESM output and declarations generated in `backend/dist`.
-- `docker compose config --quiet`: passed with exit code 0.
-- Combined `pnpm check`: passed with exit code 0.
-- Secret audit (2026-09-12): no credential-bearing PostgreSQL URL, private-key marker, common API-token pattern, or AWS access-key pattern was found outside ignored `.env`; Compose succeeds with `.env` and rejects missing database variables when evaluated without it.
-
-## Known limitations
-
-- Verification did not ingest or inspect any external market-data files; Component 2 will define that contract.
-- PostgreSQL migration behavior is implemented but not integration-tested against a running container in this checkpoint; readiness behavior uses a mocked database in unit tests.
-- Compose was configuration-validated, but the full container images and runtime stack were not started as part of the required checkpoint checks.
-- The local `.env` is ignored by Git and is the only local credential store; deployed environments must inject secrets through their platform's secret manager.
+The verified local PostgreSQL and backend Compose services are currently running and healthy. Stop them with `docker compose down` when they are no longer needed; the named PostgreSQL volume remains persistent unless explicitly removed.

@@ -1,4 +1,18 @@
+import path from 'node:path';
+
 import { z } from 'zod';
+
+const fileNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(
+    (value) =>
+      path.basename(value) === value && value !== '.' && value !== '..',
+    {
+      message: 'must be a filename without directory components',
+    },
+  );
 
 const environmentSchema = z.object({
   NODE_ENV: z
@@ -17,6 +31,19 @@ const environmentSchema = z.object({
         message: 'DATABASE_URL must use the postgres or postgresql protocol',
       },
     ),
+  DATA_DIR: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((value) => path.isAbsolute(value), {
+      message: 'DATA_DIR must be an absolute path',
+    }),
+  NSE_CM_CONTRACT_FILE: fileNameSchema.default(
+    'nse_cm_ref_contract_master.csv',
+  ),
+  NSE_FO_CONTRACT_FILE: fileNameSchema.default(
+    'nse_fo_ref_contract_master.csv',
+  ),
   DB_POOL_MAX: z.coerce.number().int().positive().default(10),
   DB_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),

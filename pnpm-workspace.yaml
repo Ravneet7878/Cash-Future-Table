@@ -2,5 +2,7 @@ packages:
   - backend
   - frontend
 
+injectWorkspacePackages: true
+
 allowBuilds:
   esbuild: true

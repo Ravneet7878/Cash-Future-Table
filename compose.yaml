@@ -28,11 +28,19 @@ services:
       PORT: 3000
       LOG_LEVEL: info
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATA_DIR: /data
+      NSE_CM_CONTRACT_FILE: ${NSE_CM_CONTRACT_FILE:-nse_cm_ref_contract_master.csv}
+      NSE_FO_CONTRACT_FILE: ${NSE_FO_CONTRACT_FILE:-nse_fo_ref_contract_master.csv}
       DB_POOL_MAX: 10
       DB_CONNECTION_TIMEOUT_MS: 5000
       SHUTDOWN_TIMEOUT_MS: 10000
     ports:
       - '127.0.0.1:3000:3000'
+    volumes:
+      - type: bind
+        source: ${DATA_DIR:?DATA_DIR must be set in .env}
+        target: /data
+        read_only: true
     depends_on:
       postgres:
         condition: service_healthy
