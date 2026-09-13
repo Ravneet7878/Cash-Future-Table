@@ -104,16 +104,22 @@ Use symbol as the stable row ID. Apply deltas through AG Grid transactions. Form
 - The grid has exactly the five specified columns.
 - Review checkpoint after every component.
 
-## Current Component 3 runtime contract
+## Current Component 4 runtime contract
 
 Configuration is validated before startup. `DATA_DIR` must be absolute, and contract filenames must be plain filenames without directory traversal. Startup runs checksum-protected migrations, parses both files, atomically replaces both stored market segments in bounded batches, and starts HTTP only after import commits. Logs report counts without the external directory path.
+
+`backend/src/config.ts` is the single backend runtime-configuration boundary and the only production module that reads `process.env`. It validates all settings and centrally resolves contract and market-data paths beneath `DATA_DIR`. Services receive typed configuration or resolved paths rather than reading environment variables. The ignored `.env` and tracked `.env.example` expose the same variable names; secret placeholders in the example remain blank.
 
 `app.contracts` stores `market`, `token`, `instrument_type`, `symbol`, nullable `expiry_date`, and `contract_name`. Its primary key is `(market, token)`, with an index on `(symbol, instrument_type, expiry_date)` used by the universe query.
 
 `app.contract_universe` ranks FUTSTK contracts per symbol by absolute ascending expiry and then token, retains one deterministic minimum-expiry future, and joins it to NSECM EQUITY by exact symbol. The service returns symbol-ordered, read-only `{ symbol, cashToken, futureToken, futureExpiry }` entries. Startup validates positive safe-integer tokens, ISO dates, symbol uniqueness, exactly 228 rows, and exactly 18 symbols ending in `NSETEST` before HTTP listens.
 
+The market replay engine creates one NSECM worker and one NSEFO worker. Each streams a headerless `token,timestamp,bid,ask,ltp` CSV file, validates non-negative safe integers, filters to its selected universe tokens, and emits batches no larger than `REPLAY_BATCH_SIZE`. An acknowledgement handshake permits only one in-flight batch per worker. Parse and read failures include the source filename and line.
+
+The main thread retains quote state for exactly the contract universe. Prices remain integer paise, zero bid or ask is `null`, newer timestamps replace older state, and later source rows win equal timestamps. Buy Spread is Future Bid minus Stock Ask; Sell Spread is Stock Bid minus Future Ask; both propagate unavailable inputs to `null`. The final state remains queryable from the engine after both workers complete.
+
 Secrets exist only in ignored `.env` or deployment secret injection. `.env.example`, Compose, source, tests, and documentation contain no real credentials.
 
-## Component 3 exclusions
+## Component 4 exclusions
 
-Component 3 does not parse market-data files, create workers, hold quotes, calculate spreads, implement WebSockets/replay, or add frontend code.
+Component 4 does not start replay from an HTTP or WebSocket client, schedule one-second publications, define the WebSocket protocol, or add frontend code. Those lifecycle and transport responsibilities begin in Component 5.

@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Component 3 — contract universe (implemented and verified on 2026-09-13). Stop before Component 4 pending user review.
+Component 4 — market replay engine (implemented and verified on 2026-09-13). Stop before Component 5 pending user review.
 
 ## Component 1 review corrections
 
@@ -34,12 +34,27 @@ Component 3 — contract universe (implemented and verified on 2026-09-13). Stop
 - Rejects invalid database row shapes, unsafe or non-positive tokens, invalid date strings, duplicate symbols, a total other than 228 rows, or a result without exactly 18 symbols ending in `NSETEST`.
 - Loads and validates the universe after the atomic contract import and before HTTP starts. A universe failure therefore prevents readiness rather than exposing a partial or invalid selection.
 
+## Component 4 behavior
+
+- Adds separate NSECM and NSEFO worker threads over the two external market-data files.
+- Streams headerless five-field `token,timestamp,bid,ask,ltp` CSV rows through `readline` without loading either file into memory.
+- Validates integer row fields with filename and line context, filters to the selected cash/future tokens, and retains prices as integer paise.
+- Converts zero bid or ask to `null`; LTP remains its source integer, including zero if present.
+- Sends batches no larger than the configurable `REPLAY_BATCH_SIZE` (default 500). Each worker waits for an acknowledgement before reading beyond the delivered batch, bounding its in-flight main-thread work to one batch.
+- Retains one quote state per universe symbol. Newer timestamps win, while a later source row wins when timestamps are equal.
+- Calculates Buy Spread as Future Bid minus Stock Ask and Sell Spread as Stock Bid minus Future Ask, with `null` propagation for unavailable inputs.
+- Exposes immutable 228-row snapshots and changed rows while retaining the final state after both workers finish.
+- Validates traversal-safe market-data filenames and a replay batch size from 1 through 10,000.
+- Keeps `backend/src/config.ts` as the single validated backend configuration boundary and only production reader of `process.env`. Contract import and replay use its typed path resolvers rather than assembling independent configuration.
+- Keeps the ignored `.env` and tracked `.env.example` variable-name sets synchronized at 17 entries; the example contains blank secret placeholders only.
+
 ## Verification evidence
 
 - `pnpm format:check`: passed.
 - `pnpm lint`: passed with zero errors or warnings.
 - `pnpm typecheck`: passed under strict TypeScript settings.
-- Full supplied-file `pnpm test`: 9 files passed, 27 tests passed with PostgreSQL integration enabled. Coverage includes configuration, parsing/filtering/expiry conversion, filename-and-line errors, duplicates, transactional rollback, repeat-import stability, migration behavior, listen errors, health routes, exact full-file counts, universe row validation, and the live universe view.
+- Component 4 test suite: 10 files passed and 38 tests passed, with the environment-gated PostgreSQL test skipped when `DATABASE_URL` is absent. New coverage includes centralized data-path resolution, market-row parsing, zero bid/ask conversion, filtering, bounded and awaited batches, invalid batch sizes, retained empty rows, paise spreads, null propagation, timestamp ordering, later-row tie-breaking, and unexpected worker tokens.
+- Final database-enabled `pnpm check`: formatting, lint, strict typecheck, all 11 test files and all 39 tests, and the production TypeScript build passed.
 - Supplied source validation: 4,433 NSECM `EQUITY` records, 647 NSEFO `FUTSTK` records, and zero duplicate `(market, token)` keys.
 - `pnpm build`: passed.
 - Clean local-filesystem snapshot `pnpm check`: passed end to end with the supplied `DATA_DIR`, covering formatting, lint, strict typecheck, all 19 tests, and production build.
@@ -54,13 +69,17 @@ Component 3 — contract universe (implemented and verified on 2026-09-13). Stop
 - Component 3 PostgreSQL-enabled test suite: all 9 files and all 27 tests passed, including the service integration test against the live database.
 - Migration `003_create_contract_universe_view.sql` applied successfully; rebuilt backend startup logged 228 universe rows before listening and remained healthy.
 - Live universe validation: 228 rows, 228 distinct symbols, 18 symbols ending in `NSETEST`, and zero selected expiries differing from each symbol's absolute FUTSTK minimum.
+- Full supplied market replay processed 8,392,467 NSECM rows and 20,337,884 NSEFO rows in 15.328 seconds. It matched 1,629,642 cash rows and 1,667,989 future rows across 3,260 and 3,336 batches respectively; neither worker exceeded 500 rows per batch.
+- Main-thread responsiveness check: all 15 expected one-second timer ticks fired during the 15.328-second full replay. Peak process RSS was 230 MiB while processing approximately 931 MiB of source data, demonstrating memory usage bounded independently of file size.
+- Final supplied-data snapshot: 228 retained rows, 228 stock LTPs, 210 future LTPs, 210 Buy Spreads, and 209 Sell Spreads. The 18 `NSETEST` rows remained present without future quotes.
+- Configuration and secret audit: `.env` is ignored and untracked; `.env` and `.env.example` have identical 17-variable key sets; only `backend/src/config.ts` reads `process.env`; tracked PostgreSQL URLs contain environment interpolation, an ellipsis placeholder, or credential-free localhost test values; no secret value is hardcoded in a tracked file.
+- `docker compose config --quiet` passed; the backend image rebuilt from the checkpoint source and the PostgreSQL and backend services both reported healthy.
 - Repeat-import integration check: backend restart re-imported 5,080 contracts; ordered dataset digest remained `2fd6cb53bda88b15263ea81aa1e59846` before and after.
 - Failure integration check: an isolated backend with an intentionally missing cash filename exited with a filename/line startup error; the prior PostgreSQL count and digest remained unchanged, and the primary backend stayed ready.
 - Secret policy: `.env` is ignored and untracked; tracked configuration uses environment interpolation and contains no credential-bearing connection URL, private key, or common API-token literal.
 
 ## Deliberately deferred
 
-- Market-data parsing, worker threads, quote state, price conversion, timestamp ordering, and spreads.
 - WebSocket protocol, replay lifecycle, snapshots, and one-second deltas.
 - React/Vite/AG Grid frontend and the five-column table.
 - Complete three-service Docker integration and final end-to-end QA.

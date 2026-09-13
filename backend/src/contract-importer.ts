@@ -1,9 +1,7 @@
-import path from 'node:path';
-
 import type { Logger } from 'pino';
 import type { PoolClient } from 'pg';
 
-import type { AppConfig } from './config.js';
+import { resolveContractFilePaths, type ContractFileConfig } from './config.js';
 import { parseContractFile, type ContractRecord } from './contracts.js';
 import type { Database } from './database.js';
 
@@ -17,19 +15,17 @@ export type ContractImportSummary = {
 
 export async function importContracts(
   database: Database,
-  config: Pick<
-    AppConfig,
-    'DATA_DIR' | 'NSE_CM_CONTRACT_FILE' | 'NSE_FO_CONTRACT_FILE'
-  >,
+  config: ContractFileConfig,
   logger: Logger,
 ): Promise<ContractImportSummary> {
+  const files = resolveContractFilePaths(config);
   const [cashContracts, futureContracts] = await Promise.all([
     parseContractFile({
-      filePath: path.join(config.DATA_DIR, config.NSE_CM_CONTRACT_FILE),
+      filePath: files.cash,
       market: 'NSECM',
     }),
     parseContractFile({
-      filePath: path.join(config.DATA_DIR, config.NSE_FO_CONTRACT_FILE),
+      filePath: files.future,
       market: 'NSEFO',
     }),
   ]);
