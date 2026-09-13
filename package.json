@@ -4,16 +4,16 @@
   "private": true,
   "packageManager": "pnpm@11.19.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "scripts": {
-    "build": "pnpm --filter @cash-future/backend build",
+    "build": "pnpm --recursive --if-present build",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "pnpm --filter @cash-future/backend lint",
-    "test": "pnpm --filter @cash-future/backend test",
-    "typecheck": "pnpm --filter @cash-future/backend typecheck"
+    "lint": "pnpm --recursive --if-present lint",
+    "test": "pnpm --recursive --if-present test",
+    "typecheck": "pnpm --recursive --if-present typecheck"
   },
   "devDependencies": {
     "prettier": "3.6.2"

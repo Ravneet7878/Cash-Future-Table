@@ -1,10 +1,10 @@
 # Cash–Future Table
 
-Components 1–5 provide the TypeScript/Express backend foundation, PostgreSQL development stack, atomic startup ingestion of external NSE contract reference files, the verified 228-row cash/future contract universe, a bounded two-worker market replay engine, and the versioned WebSocket backend. The frontend is intentionally deferred to the next reviewed checkpoint.
+Components 1–6 provide the complete backend pipeline plus an independent React/Vite frontend foundation. The responsive Basis dashboard consumes the versioned WebSocket stream, validates every message, replaces authoritative snapshots, applies sequenced deltas, and reconnects safely. The AG Grid market table remains isolated to the next reviewed checkpoint.
 
 ## Requirements
 
-- Node.js 22+
+- Node.js 22.12+
 - pnpm 11+
 - Docker Desktop for the container workflow
 - The four supplied contract-reference and market-data files in an external directory
@@ -40,16 +40,17 @@ Fill the blank PostgreSQL values and set `DATA_DIR` to the absolute directory co
 
 Secrets belong only in ignored `.env` for local development or in a deployment secret manager. Never commit `.env`.
 
-All backend runtime configuration is defined and validated in `backend/src/config.ts`; it is the only production source file that reads `process.env`. It also resolves the configured contract and market-data filenames beneath `DATA_DIR`, so import and replay services do not construct independent configuration. `.env` and `.env.example` carry the same variable names, while `.env.example` deliberately leaves secret values blank.
+All backend runtime configuration is defined and validated in `backend/src/config.ts`; it is the only production source file that reads `process.env`. Browser configuration is isolated in `frontend/src/config.ts`, which validates `VITE_WEBSOCKET_URL` and otherwise derives a same-origin `ws://` or `wss://` endpoint. `.env` and `.env.example` carry the same variable names, while `.env.example` deliberately leaves secret values blank.
 
 ## Local development
 
-Start PostgreSQL, then start the backend:
+Start PostgreSQL, then run the backend and frontend in separate terminals:
 
 ```sh
 docker compose up -d postgres
 pnpm install
 pnpm --filter @cash-future/backend dev
+pnpm --filter @cash-future/frontend dev
 ```
 
 Startup performs this sequence before accepting HTTP traffic:
@@ -84,6 +85,12 @@ Connect to `ws://localhost:3000/ws` by default. Every connection immediately rec
 Changed rows are coalesced by symbol and published in sequence-numbered deltas once per second. Any remaining changes are flushed immediately before `complete`, and the final snapshot remains available to later connections. Status values are `waiting`, `running`, `complete`, and `error`.
 
 Protocol prices are converted from internal paise to rupees. See [the committed WebSocket protocol](docs/WEBSOCKET_PROTOCOL.md) for the exact version 1 message schemas, sequencing rules, reconnect behavior, and null handling.
+
+## Frontend foundation
+
+Open `http://localhost:5173` during local development. The responsive Basis dashboard reports connection and replay state, contract and quote coverage, the latest sequence, and safe transport diagnostics. It uses the committed protocol rather than importing backend implementation code.
+
+The client rejects malformed messages and unsupported protocol versions. A full snapshot replaces all local rows; only the next sequence delta is applied. Stale deltas are ignored, while a missing snapshot, sequence gap, invalid message, or interrupted socket triggers an exponential reconnect and obtains a fresh authoritative snapshot. The reconnect delay begins at 500 ms and caps at eight seconds.
 
 ## Container workflow
 
@@ -123,5 +130,5 @@ See [the project specification](docs/PROJECT_SPEC.md) for the approved nine-comp
 
 ## Current limitations
 
-- No React/AG Grid frontend.
+- The React frontend foundation is complete; the five-column AG Grid table begins in Component 7.
 - No order execution or trading functionality is present or planned.

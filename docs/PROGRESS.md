@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Component 5 — WebSocket backend (implemented and verified on 2026-09-13). Stop before Component 6 pending user review.
+Component 6 — frontend foundation (implemented and verified on 2026-09-13). Stop before Component 7 pending user review.
 
 ## Component 1 review corrections
 
@@ -61,6 +61,19 @@ Component 5 — WebSocket backend (implemented and verified on 2026-09-13). Stop
 - Terminates replay workers and WebSocket clients during graceful backend shutdown.
 - Commits the full endpoint, row shape, message schemas, sequencing, reconnect rules, null behavior, and lifecycle contract in `docs/WEBSOCKET_PROTOCOL.md`.
 
+## Component 6 behavior
+
+- Adds an independent React 19.3 and Vite 8.3 application with strict TypeScript, ESLint, Vitest 5, jsdom, Testing Library, and exact dependency versions.
+- Implements protocol version 1 as a standalone frontend contract with runtime validation for message type, version, sequence, status, row count, unique symbols, finite price values, and error semantics.
+- Replaces all local rows from each authoritative 228-row snapshot and applies complete delta upserts by symbol only when the sequence is exactly next.
+- Ignores stale or duplicate deltas and reconnects for a missing snapshot, sequence gap, ahead-of-state status, malformed JSON, invalid payload, or transport failure.
+- Uses exponential reconnect delay starting at 500 milliseconds and capped at eight seconds; a protocol gap requests an immediate fresh snapshot.
+- Separates the WebSocket controller from React and exposes stable external-store subscriptions through `useSyncExternalStore`.
+- Adds a single typed browser configuration boundary in `frontend/src/config.ts`; `VITE_WEBSOCKET_URL` must use `ws://` or `wss://`, with secure same-origin derivation when blank.
+- Adds the responsive Basis market-intelligence dashboard with connection/replay states, universe and quote coverage, sequence freshness, safe diagnostics, reduced-motion support, and an explicit read-only/no-order-execution boundary.
+- Keeps AG Grid and the final five-column market table out of this checkpoint so frontend state handling is verified independently first.
+- Updates root workspace commands so formatting, lint, type checks, tests, and builds cover both backend and frontend applications.
+
 ## Verification evidence
 
 - `pnpm format:check`: passed.
@@ -85,19 +98,23 @@ Component 5 — WebSocket backend (implemented and verified on 2026-09-13). Stop
 - Full supplied market replay processed 8,392,467 NSECM rows and 20,337,884 NSEFO rows in 15.328 seconds. It matched 1,629,642 cash rows and 1,667,989 future rows across 3,260 and 3,336 batches respectively; neither worker exceeded 500 rows per batch.
 - Main-thread responsiveness check: all 15 expected one-second timer ticks fired during the 15.328-second full replay. Peak process RSS was 230 MiB while processing approximately 931 MiB of source data, demonstrating memory usage bounded independently of file size.
 - Final supplied-data snapshot: 228 retained rows, 228 stock LTPs, 210 future LTPs, 210 Buy Spreads, and 209 Sell Spreads. The 18 `NSETEST` rows remained present without future quotes.
-- Configuration and secret audit: `.env` is ignored and untracked; `.env` and `.env.example` have identical 18-variable key sets; only `backend/src/config.ts` reads `process.env`; tracked PostgreSQL URLs contain environment interpolation, an ellipsis placeholder, or credential-free localhost test values; no secret value is hardcoded in a tracked file.
+- Configuration and secret audit: `.env` is ignored and untracked; `.env` and `.env.example` have identical 19-variable key sets; only `backend/src/config.ts` reads `process.env`, while only `frontend/src/config.ts` reads `import.meta.env`; tracked PostgreSQL URLs contain environment interpolation, an ellipsis placeholder, or credential-free localhost test values; no secret value is hardcoded in a tracked file.
 - `docker compose config --quiet` passed; the backend image rebuilt from the checkpoint source and the PostgreSQL and backend services both reported healthy.
 - Component 5 database-enabled `pnpm check`: formatting, lint, strict typecheck, all 13 test files and all 42 tests, and the production build passed. New integration coverage verifies first-client-only replay start, 228-row snapshots, running reconnects, one-second coalescing, monotonic sequence numbers, immediate final/error flushes, retained final snapshots, and paise-to-rupee conversion.
 - Live Docker WebSocket replay: initial snapshot contained 228 rows; statuses arrived as `waiting`, `running`, and `complete`; 35 consecutive deltas were received over 34.842 seconds (34 interval publications plus the immediate final flush).
 - Live final WebSocket state contained 228 stock rows, 210 future LTPs, 210 Buy Spreads, and 209 Sell Spreads. A new post-completion connection received sequence 35, `complete`, and a snapshot identical to the state reconstructed from the initial snapshot and all deltas.
 - Live worker completion logs retained the verified Component 4 counts: 8,392,467 NSECM source rows and 20,337,884 NSEFO source rows, with maximum batches of 500.
+- Component 6 clean-copy `pnpm check` under Node 24.19: formatting, backend/frontend lint, strict type checks, all 13 backend test files with 42 tests, all five frontend test files with 19 tests, and both production builds passed.
+- Frontend tests cover protocol rejection, 228-row snapshot replacement, exact-next and stale delta behavior, sequence-gap recovery, replay status, URL validation, exponential reconnect, malformed-message reconnect, and rendered connection/replay/coverage states.
+- Vite production output: 0.65 kB HTML, 10.10 kB CSS (3.08 kB gzip), and 453.27 kB JavaScript (137.07 kB gzip).
+- Live local DOM verification against the running backend reported 228 universe rows, 228 cash LTPs, 210 future LTPs, active one-second sequences, a live connection, and running replay status.
 - Repeat-import integration check: backend restart re-imported 5,080 contracts; ordered dataset digest remained `2fd6cb53bda88b15263ea81aa1e59846` before and after.
 - Failure integration check: an isolated backend with an intentionally missing cash filename exited with a filename/line startup error; the prior PostgreSQL count and digest remained unchanged, and the primary backend stayed ready.
 - Secret policy: `.env` is ignored and untracked; tracked configuration uses environment interpolation and contains no credential-bearing connection URL, private key, or common API-token literal.
 
 ## Deliberately deferred
 
-- React/Vite/AG Grid frontend and the five-column table.
+- AG Grid and the final five-column market table.
 - Complete three-service Docker integration and final end-to-end QA.
 - Order execution and trading functionality are not implemented and are not part of the project.
 

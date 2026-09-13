@@ -104,7 +104,7 @@ Use symbol as the stable row ID. Apply deltas through AG Grid transactions. Form
 - The grid has exactly the five specified columns.
 - Review checkpoint after every component.
 
-## Current Component 5 runtime contract
+## Current Component 6 runtime contract
 
 Configuration is validated before startup. `DATA_DIR` must be absolute, and contract filenames must be plain filenames without directory traversal. Startup runs checksum-protected migrations, parses both files, atomically replaces both stored market segments in bounded batches, and starts HTTP only after import commits. Logs report counts without the external directory path.
 
@@ -122,8 +122,14 @@ The backend exposes protocol version 1 at configurable `WEBSOCKET_PATH` (`/ws` b
 
 The status lifecycle is `waiting`, `running`, then `complete` or `error`. The completed state and latest sequence are retained for reconnecting clients. Exact schemas and client sequencing behavior are committed in `docs/WEBSOCKET_PROTOCOL.md`.
 
+The independent frontend uses React 19 and Vite 8 with a single typed configuration boundary at `frontend/src/config.ts`. `VITE_WEBSOCKET_URL` accepts only `ws://` or `wss://`; when omitted, the client derives `/ws` from the browser origin. Vite reads the shared root environment file.
+
+Every WebSocket payload is parsed and validated at runtime. A 228-row snapshot atomically replaces client state. Deltas are complete row upserts keyed by symbol: stale sequences are ignored, the exact next sequence is applied, and a gap or pre-snapshot delta forces a reconnect. Invalid payloads and transport interruptions also reconnect with exponential delay from 500 milliseconds through an eight-second cap.
+
+The responsive Basis dashboard exposes connection and replay status, coverage summaries, the current sequence, safe diagnostics, and the explicit read-only/no-order-execution boundary. The underlying state is tested independently before AG Grid is introduced.
+
 Secrets exist only in ignored `.env` or deployment secret injection. `.env.example`, Compose, source, tests, and documentation contain no real credentials.
 
-## Component 5 exclusions
+## Component 6 exclusions
 
-Component 5 does not add frontend code, AG Grid, browser-side reconnection logic, or sequence-gap recovery. Those client responsibilities begin in Components 6 and 7.
+Component 6 does not add AG Grid, the final five-column market table, or containerize the frontend. Those responsibilities begin in Components 7 and 8.
