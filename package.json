@@ -9,6 +9,10 @@
   "scripts": {
     "build": "pnpm --recursive --if-present build",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "docker:config": "docker compose config --quiet",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs --follow",
+    "docker:up": "docker compose up --build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "pnpm --recursive --if-present lint",

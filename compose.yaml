@@ -26,7 +26,7 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 3000
-      LOG_LEVEL: info
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       DATA_DIR: /data
       NSE_CM_CONTRACT_FILE: ${NSE_CM_CONTRACT_FILE:-nse_cm_ref_contract_master.csv}
@@ -35,9 +35,9 @@ services:
       NSE_FO_MARKET_DATA_FILE: ${NSE_FO_MARKET_DATA_FILE:-nsefo_market_data.csv}
       REPLAY_BATCH_SIZE: ${REPLAY_BATCH_SIZE:-500}
       WEBSOCKET_PATH: ${WEBSOCKET_PATH:-/ws}
-      DB_POOL_MAX: 10
-      DB_CONNECTION_TIMEOUT_MS: 5000
-      SHUTDOWN_TIMEOUT_MS: 10000
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      DB_CONNECTION_TIMEOUT_MS: ${DB_CONNECTION_TIMEOUT_MS:-5000}
+      SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
     ports:
       - '127.0.0.1:3000:3000'
     volumes:
@@ -62,6 +62,31 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+    stop_grace_period: 15s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      WEBSOCKET_PATH: ${WEBSOCKET_PATH:-/ws}
+    ports:
+      - '127.0.0.1:8080:8080'
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/healthz || exit 1',
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    stop_grace_period: 10s
 
 volumes:
   postgres-data:

@@ -104,7 +104,7 @@ Use symbol as the stable row ID. Apply deltas through AG Grid transactions. Form
 - The grid has exactly the five specified columns.
 - Review checkpoint after every component.
 
-## Current Component 7 runtime contract
+## Current Component 8 runtime contract
 
 Configuration is validated before startup. `DATA_DIR` must be absolute, and contract filenames must be plain filenames without directory traversal. Startup runs checksum-protected migrations, parses both files, atomically replaces both stored market segments in bounded batches, and starts HTTP only after import commits. Logs report counts without the external directory path.
 
@@ -132,8 +132,14 @@ AG Grid Community 36.1 renders exactly Symbol, Stock LTP, Future LTP, Buy Spread
 
 All five columns are sortable, filterable, resizable, and flex-sized with minimum widths for responsive horizontal overflow. A symbol quick filter complements the typed floating column filters. Prices and spreads are formatted in rupees with exactly two decimals, and `null` is displayed as an em dash. Positive and negative spreads receive restrained semantic color while preserving the numeric value.
 
+Docker Compose runs PostgreSQL 17, the Node.js backend, and the production frontend as one dependency-ordered stack. PostgreSQL must become healthy before the backend starts; the backend must complete migrations, imports, universe validation, and its readiness check before the frontend starts. All three services have explicit health checks and restart policies.
+
+The frontend image builds the Vite application with an empty deployment-specific WebSocket URL, serves the static output from pinned official Nginx 1.31.5 Alpine, and exposes `/healthz`. The browser therefore derives same-origin `/ws`; Nginx performs the required HTTP/1.1 upgrade and proxies it to the backend's configured internal WebSocket path. The image also supports single-page-application fallback, gzip, and conservative response-security headers.
+
+Compose mounts external `DATA_DIR` at `/data` only in the backend and marks the bind read-only. PostgreSQL uses a persistent named volume. Published PostgreSQL, backend, and frontend ports bind to `127.0.0.1`; public TLS and authentication remain deployment responsibilities. Root scripts provide stack startup, shutdown, logs, and configuration validation.
+
 Secrets exist only in ignored `.env` or deployment secret injection. `.env.example`, Compose, source, tests, and documentation contain no real credentials.
 
-## Component 7 exclusions
+## Component 8 exclusions
 
-Component 7 does not containerize the frontend or perform Playwright end-to-end QA. Those responsibilities begin in Components 8 and 9.
+Component 8 does not add Playwright or perform the final browser acceptance and supplied-file QA matrix. Those responsibilities remain in Component 9.

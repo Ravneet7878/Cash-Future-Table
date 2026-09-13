@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Component 7 — AG Grid table (implemented and verified on 2026-09-13). Stop before Component 8 pending user review.
+Component 8 — Docker integration (implemented and verified on 2026-09-13). Stop before Component 9 pending user review.
 
 ## Component 1 review corrections
 
@@ -85,6 +85,18 @@ Component 7 — AG Grid table (implemented and verified on 2026-09-13). Stop bef
 - Adds tabular numeric alignment, restrained positive/negative spread styling, cell-change flash, loading state, row count, missing-value guidance, responsive controls, and keyboard-visible native inputs.
 - Corrects frontend ESLint path resolution for workspace paths containing spaces by decoding the configuration URL before passing it to the TypeScript project service.
 
+## Component 8 behavior
+
+- Adds a multi-stage frontend image: Node.js 22 builds the Vite application from the frozen workspace lockfile, and pinned official Nginx 1.31.5 Alpine serves only the production assets.
+- Builds deployment assets without a host-specific WebSocket URL so the browser derives same-origin `/ws` instead of attempting to connect to its own localhost in remote deployments.
+- Adds an Nginx template that serves SPA routes, exposes `/healthz`, enables gzip and response-security headers, and explicitly forwards the HTTP/1.1 Upgrade and Connection headers required for WebSocket proxying.
+- Maps public `/ws` to the backend's configurable internal `WEBSOCKET_PATH`, keeping the browser contract stable if the backend path is customized.
+- Extends Compose to run PostgreSQL, backend, and frontend in health-ordered sequence, with explicit health checks, restart policies, graceful-stop windows, persistent database storage, and localhost-only published ports.
+- Keeps the external `DATA_DIR` bind exclusive to the backend and read-only. No source data or ignored `.env` file enters either application image context.
+- Updates the backend Docker build to include both workspace package manifests, allowing frozen installs after the frontend workspace was introduced.
+- Adds root commands for Compose configuration validation, startup/build, logs, and shutdown.
+- Replaces the README's incremental build narrative with a final application guide covering architecture, source formats, configuration, full-stack startup, dashboard behavior, replay guarantees, local development, operations, verification, and limitations.
+
 ## Verification evidence
 
 - `pnpm format:check`: passed.
@@ -124,16 +136,22 @@ Component 7 — AG Grid table (implemented and verified on 2026-09-13). Stop bef
 - Component 7 Vite production output: 0.65 kB HTML, 10.76 kB CSS (3.28 kB gzip), and 1,566.66 kB JavaScript (446.44 kB gzip). The current Community bundle-size warning is documented as a non-blocking optimization opportunity.
 - Component 7 full workspace check: formatting, backend/frontend lint, strict type checks, 42 backend tests (40 passed and two environment-gated tests skipped), all 24 frontend tests, and both production builds passed. The network-enabled rerun was required only so existing backend integration tests could bind ephemeral localhost ports.
 - Component 7 configuration audit: `.env` remains ignored and untracked; its variable-name digest exactly matches `.env.example`; no new configuration variables were introduced; only the central backend and frontend config modules read their respective environment APIs; and the tracked secret-pattern scan returned no matches.
+- Component 8 full workspace check: formatting, backend/frontend lint, strict type checks, 42 backend tests (40 passed and two environment-gated tests skipped), all 24 frontend tests, and both production builds passed.
+- `docker compose config --quiet` passed, and clean frozen builds completed for both backend and frontend images. The frontend production build emitted 0.65 kB HTML, 10.76 kB CSS (3.28 kB gzip), and 1,352.20 kB JavaScript (384.41 kB gzip).
+- `docker compose up -d --build --wait` rebuilt and started the finalized stack successfully; PostgreSQL, backend, and frontend all reached Docker `healthy` state in dependency order.
+- Live HTTP integration returned 200 for the Nginx dashboard, frontend `/healthz`, backend `/health/live`, and backend `/health/ready`.
+- Live same-origin WebSocket integration through `ws://127.0.0.1:8080/ws` received a complete 228-row sequence-zero snapshot followed by `waiting` and `running` replay statuses.
+- Runtime container inspection confirmed the backend's `/data` mount has `readWrite=false`. Nginx's native configuration test passed, and the frontend response included nosniff, frame-denial, strict-referrer, and camera/microphone/geolocation permissions headers.
+- Component 8 configuration audit reconfirmed identical `.env` and `.env.example` variable-name digests, ignored and untracked `.env`, exactly one backend and one frontend environment-reading config module, no component-oriented wording in README, and no tracked secret-pattern matches.
 - Repeat-import integration check: backend restart re-imported 5,080 contracts; ordered dataset digest remained `2fd6cb53bda88b15263ea81aa1e59846` before and after.
 - Failure integration check: an isolated backend with an intentionally missing cash filename exited with a filename/line startup error; the prior PostgreSQL count and digest remained unchanged, and the primary backend stayed ready.
 - Secret policy: `.env` is ignored and untracked; tracked configuration uses environment interpolation and contains no credential-bearing connection URL, private key, or common API-token literal.
 
 ## Deliberately deferred
 
-- Complete three-service Docker integration.
 - Playwright and final end-to-end QA.
 - Order execution and trading functionality are not implemented and are not part of the project.
 
 ## Operational note
 
-The verified local PostgreSQL and backend Compose services are currently running and healthy. Stop them with `docker compose down` when they are no longer needed; the named PostgreSQL volume remains persistent unless explicitly removed.
+The verified local PostgreSQL, backend, and frontend Compose services are currently running and healthy. Open the dashboard at `http://localhost:8080`. Stop the stack with `docker compose down` when it is no longer needed; the named PostgreSQL volume remains persistent unless explicitly removed.

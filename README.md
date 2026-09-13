@@ -1,137 +1,173 @@
 # Cash–Future Table
 
-Components 1–7 provide the complete backend pipeline and a professional React/Vite market-data interface. The responsive Basis dashboard consumes the versioned WebSocket stream, validates every message, replaces authoritative snapshots, applies sequenced deltas, reconnects safely, and presents the full contract universe in AG Grid Community.
+Cash–Future Table is a local-first, read-only market-data application for comparing NSE cash equities with their selected stock futures. It imports the supplied contract universe into PostgreSQL, replays large cash and futures feeds through bounded worker threads, publishes live WebSocket updates, and displays all 228 paired symbols in a professional AG Grid dashboard.
+
+The application calculates:
+
+- **Buy Spread:** Future Bid − Stock Ask
+- **Sell Spread:** Stock Bid − Future Ask
+
+Prices are shown in rupees with two decimal places. Missing bid or ask values remain unavailable and are displayed as an em dash. The application contains no order entry, execution, brokerage, portfolio, or other trading functionality.
+
+## Architecture
+
+- **PostgreSQL 17:** stores imported NSECM and NSEFO contract reference data.
+- **Node.js backend:** validates configuration, applies migrations, imports contracts, selects the 228-symbol universe, and serves health and WebSocket endpoints.
+- **Replay workers:** independently stream NSECM and NSEFO market files without loading them into memory.
+- **React frontend:** validates the versioned WebSocket protocol, handles snapshots, sequenced deltas, and reconnects, and renders the live table with AG Grid Community.
+- **Nginx frontend container:** serves the production assets and proxies the browser's same-origin `/ws` connection to the backend.
+
+External source files are never copied into Git or an image. Docker Compose mounts their host directory read-only into the backend container.
 
 ## Requirements
 
-- Node.js 22.12+
-- pnpm 11+
-- Docker Desktop for the container workflow
-- The four supplied contract-reference and market-data files in an external directory
+- Docker Desktop with Docker Compose
+- Four supplied contract-reference and market-data files in one external directory
+- Node.js 22.12+ and pnpm 11+ only when running or testing outside Docker
 
-## External data files
+## Data files
 
-The application expects these exact default filenames:
+The default filenames are:
 
-- `nse_cm_ref_contract_master.csv`
-- `nse_fo_ref_contract_master.csv`
-- `nsecm_market_data.csv`
-- `nsefo_market_data.csv`
+```text
+nse_cm_ref_contract_master.csv
+nse_fo_ref_contract_master.csv
+nsecm_market_data.csv
+nsefo_market_data.csv
+```
 
-Both files are headerless and contain 14 whitespace-delimited fields per line, in this order:
+Contract files are headerless, whitespace-delimited, and contain these 14 fields:
 
 ```text
 token streamId instrumentType symbol expiryDate strikePrice optionType lotSize lotSize2 tickSize freezeQuantity minPriceRange maxPriceRange contractName
 ```
 
-Only NSECM `EQUITY` and NSEFO `FUTSTK` records are retained. The supplied complete files produce 4,433 cash contracts and 647 futures contracts. Source files remain outside Git and are mounted read-only in Docker.
+Only NSECM `EQUITY` and NSEFO `FUTSTK` records are retained. The supplied reference files contain 4,433 eligible cash contracts and 647 eligible futures contracts.
 
-The two market-data files are also headerless and use comma-delimited `token,timestamp,bid,ask,ltp` rows. Prices are integer paise. Their filenames and the bounded replay batch size can be changed with `NSE_CM_MARKET_DATA_FILE`, `NSE_FO_MARKET_DATA_FILE`, and `REPLAY_BATCH_SIZE`.
+Market-data files are headerless CSV records:
+
+```text
+token,timestamp,bid,ask,ltp
+```
+
+Market prices remain integer paise inside the replay engine and are converted to rupees only at the WebSocket boundary.
 
 ## Configuration
 
-Create the ignored local environment file:
+Create the ignored environment file:
 
 ```sh
 cp .env.example .env
 ```
 
-Fill the blank PostgreSQL values and set `DATA_DIR` to the absolute directory containing the four files. Contract and market-data filenames can be changed through their corresponding `NSE_*_FILE` variables, but each value must be a filename without directory components.
+Set these required values in `.env`:
 
-Secrets belong only in ignored `.env` for local development or in a deployment secret manager. Never commit `.env`.
+- `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` for the local database.
+- `DATABASE_URL` for backend commands executed directly on the host.
+- `DATA_DIR` to the absolute host directory containing all four source files.
 
-All backend runtime configuration is defined and validated in `backend/src/config.ts`; it is the only production source file that reads `process.env`. Browser configuration is isolated in `frontend/src/config.ts`, which validates `VITE_WEBSOCKET_URL` and otherwise derives a same-origin `ws://` or `wss://` endpoint. `.env` and `.env.example` carry the same variable names, while `.env.example` deliberately leaves secret values blank.
+The provided filenames, replay batch size, WebSocket path, database pool, timeouts, and host-development settings can also be adjusted in `.env`. Filename settings accept plain filenames only; `DATA_DIR` must be absolute. The packaged stack deliberately binds fixed internal service ports and publishes them only on localhost.
+
+Secrets belong only in ignored `.env` files or a deployment secret manager. The tracked `.env.example` deliberately contains blank credential values. Backend environment access is centralized in `backend/src/config.ts`; browser environment access is centralized in `frontend/src/config.ts`.
+
+## Run the complete application
+
+Build and start PostgreSQL, the backend, and the frontend:
+
+```sh
+pnpm docker:up
+```
+
+The same operation can be run directly with `docker compose up --build`.
+
+After all three services report healthy, open:
+
+- Dashboard: `http://localhost:8080`
+- Frontend health: `http://localhost:8080/healthz`
+- Backend liveness: `http://localhost:3000/health/live`
+- Backend readiness: `http://localhost:3000/health/ready`
+
+The first browser connection starts the single global replay. New and reconnected clients immediately receive the current complete 228-row snapshot. Changed rows are published once per second, remaining changes are flushed at completion, and the final state stays available until the backend restarts.
+
+Useful container commands:
+
+```sh
+pnpm docker:logs
+pnpm docker:down
+pnpm docker:config
+```
+
+`docker compose down` preserves the PostgreSQL volume. Running `docker compose down --volumes` also deletes the imported database and should be used only when a clean database reset is intended.
+
+## Dashboard behavior
+
+The interface shows connection and replay state, contract and quote coverage, sequence freshness, and exactly these table columns:
+
+1. Symbol
+2. Stock LTP
+3. Future LTP
+4. Buy Spread
+5. Sell Spread
+
+All columns support sorting, typed filtering, resizing, and responsive sizing. Symbol search is available above the table. Symbol is the stable row ID, snapshots replace the authoritative grid data, and accepted deltas update changed rows through AG Grid transactions. All 228 symbols remain in state, including the 18 `NSETEST` symbols without future quotes.
+
+## Data and replay guarantees
+
+- The selected future is the absolute minimum FUTSTK expiry for each symbol; expiry selection is not relative to the current date.
+- An equal minimum expiry is resolved deterministically with the lower future token.
+- Cash and futures are joined by exact symbol.
+- Zero bid or ask is converted to unavailable; zero LTP remains valid source data.
+- A newer timestamp wins; for equal timestamps, the later source-file row wins.
+- Each worker permits only one bounded batch in flight.
+- Invalid source data reports the filename and line and prevents readiness.
+- Contract replacement is transactional and idempotent.
+- Quote state remains in memory and is retained after replay completion.
+
+The exact message schemas and sequencing rules are documented in [docs/WEBSOCKET_PROTOCOL.md](docs/WEBSOCKET_PROTOCOL.md).
 
 ## Local development
 
-Start PostgreSQL, then run the backend and frontend in separate terminals:
+Install dependencies and start PostgreSQL:
 
 ```sh
-docker compose up -d postgres
 pnpm install
+docker compose up -d postgres
+```
+
+Run the backend and frontend in separate terminals:
+
+```sh
 pnpm --filter @cash-future/backend dev
 pnpm --filter @cash-future/frontend dev
 ```
 
-Startup performs this sequence before accepting HTTP traffic:
+The Vite development server is available at `http://localhost:5173`. Its configured `VITE_WEBSOCKET_URL` connects directly to the backend.
 
-1. Validate environment configuration.
-2. Connect to PostgreSQL and apply checksum-protected SQL migrations.
-3. Stream and validate both external contract files.
-4. Replace both stored market segments in one transaction using bounded insert batches.
-5. Load and validate the 228-row cash/future contract universe.
-6. Start the Express server only after the import and universe validation succeed.
+## Verification
 
-Malformed input reports its filename and line. Parsing or database failure leaves previously committed contracts intact and prevents the HTTP server from becoming ready.
-
-## Contract universe
-
-The `app.contract_universe` PostgreSQL view ranks NSEFO `FUTSTK` contracts independently for each symbol by expiry date, selects the absolute minimum expiry, and joins it to the exact NSECM `EQUITY` symbol. Expiry selection is deliberately not relative to the current date. If two futures have the same minimum expiry, the lower token is the deterministic tie-breaker.
-
-The backend service exposes each row as a read-only `{ symbol, cashToken, futureToken, futureExpiry }` entry ordered by symbol. Startup rejects malformed tokens or dates, duplicate symbols, any row count other than 228, or any result that does not contain exactly 18 symbols ending in `NSETEST`. The supplied files produce 228 unique rows, including all 18 test symbols.
-
-## Market replay engine
-
-`MarketReplayEngine` runs NSECM and NSEFO readers in separate worker threads. Each worker streams its file line by line, filters to the selected universe tokens, and waits for a main-thread acknowledgement after every bounded batch. This keeps at most one batch per worker in flight and prevents the worker message queue from growing with file size.
-
-Quote state remains in memory and in integer paise. A zero bid or ask becomes unavailable (`null`); LTP remains an integer paise value. A quote replaces prior state only when its timestamp is newer, or when it occurs later in the same source file with an equal timestamp. Buy Spread is Future Bid minus Stock Ask, and Sell Spread is Stock Bid minus Future Ask; either result is `null` when an input is unavailable.
-
-The engine retains all 228 rows throughout replay and after completion. It starts once, globally, when the first WebSocket client connects.
-
-## WebSocket stream
-
-Connect to `ws://localhost:3000/ws` by default. Every connection immediately receives a full 228-row snapshot and the current replay status. The first connection starts the single replay; additional or reconnected clients never start another replay.
-
-Changed rows are coalesced by symbol and published in sequence-numbered deltas once per second. Any remaining changes are flushed immediately before `complete`, and the final snapshot remains available to later connections. Status values are `waiting`, `running`, `complete`, and `error`.
-
-Protocol prices are converted from internal paise to rupees. See [the committed WebSocket protocol](docs/WEBSOCKET_PROTOCOL.md) for the exact version 1 message schemas, sequencing rules, reconnect behavior, and null handling.
-
-## Frontend application
-
-Open `http://localhost:5173` during local development. The responsive Basis dashboard reports connection and replay state, contract and quote coverage, the latest sequence, and safe transport diagnostics. It uses the committed protocol rather than importing backend implementation code.
-
-The client rejects malformed messages and unsupported protocol versions. A full snapshot replaces all local rows; only the next sequence delta is applied. Stale deltas are ignored, while a missing snapshot, sequence gap, invalid message, or interrupted socket triggers an exponential reconnect and obtains a fresh authoritative snapshot. The reconnect delay begins at 500 ms and caps at eight seconds.
-
-The table retains all 228 symbols and displays exactly Symbol, Stock LTP, Future LTP, Buy Spread, and Sell Spread. Symbol is the stable AG Grid row ID. Snapshots replace the authoritative row set; one-second deltas update only their changed symbols through grid transactions. Columns support sorting, typed filters, resizing, responsive flex sizing, and a symbol quick search. Numeric values use two decimal places, while unavailable values remain an em dash.
-
-## Container workflow
-
-Run the packaged PostgreSQL and backend services with:
-
-```sh
-docker compose up --build
-```
-
-Compose reads the host `DATA_DIR` from `.env`, mounts it at `/data` read-only, waits for PostgreSQL health, and then starts the backend. PostgreSQL state is retained in the `postgres-data` volume.
-
-## Health endpoints
-
-- `GET http://localhost:3000/health/live` confirms the HTTP process is alive.
-- `GET http://localhost:3000/health/ready` queries PostgreSQL and returns HTTP 503 when unavailable.
-
-## Verification commands
+Run formatting checks, linting, strict type checks, all unit and integration tests, and both production builds:
 
 ```sh
 pnpm check
-docker compose config --quiet
 ```
 
-To run the supplied-file count test explicitly:
+Validate the resolved container configuration:
 
 ```sh
-DATA_DIR=/absolute/path/to/external/data pnpm --filter @cash-future/backend test -- supplied-contracts.test.ts
+pnpm docker:config
 ```
 
-The PostgreSQL-backed universe integration test runs when `DATABASE_URL` is set:
+PostgreSQL-backed and supplied-file tests run when `DATABASE_URL` and `DATA_DIR` point to available resources:
 
 ```sh
-DATABASE_URL=postgresql://... DATA_DIR=/absolute/path/to/external/data pnpm --filter @cash-future/backend test
+DATABASE_URL=postgresql://... DATA_DIR=/absolute/path/to/data pnpm --filter @cash-future/backend test
 ```
 
-See [the project specification](docs/PROJECT_SPEC.md) for the approved nine-component plan and [the progress log](docs/PROGRESS.md) for checkpoint evidence.
+Detailed verification history is recorded in [docs/PROGRESS.md](docs/PROGRESS.md), and the approved technical contract is retained in [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md).
 
-## Current limitations
+## Known limitations
 
-- The frontend is not yet included in Docker Compose; that integration begins in Component 8.
-- The AG Grid Community production bundle is approximately 1.57 MB before gzip (446 kB gzip); bundle splitting remains an optimization opportunity.
-- No order execution or trading functionality is present or planned.
+- Source data is replayed from files; this is not a live exchange connection.
+- The production frontend bundle is approximately 1.35 MB before gzip and can benefit from future code splitting.
+- TLS and public authentication are deployment concerns; the supplied Compose stack binds its ports to localhost.
+- Playwright browser automation and the final end-to-end acceptance pass remain outstanding.
