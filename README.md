@@ -1,6 +1,6 @@
 # Cash–Future Table
 
-Components 1–4 provide the TypeScript/Express backend foundation, PostgreSQL development stack, atomic startup ingestion of external NSE contract reference files, the verified 228-row cash/future contract universe, and a bounded two-worker market replay engine. WebSockets and the frontend are intentionally deferred to later reviewed checkpoints.
+Components 1–5 provide the TypeScript/Express backend foundation, PostgreSQL development stack, atomic startup ingestion of external NSE contract reference files, the verified 228-row cash/future contract universe, a bounded two-worker market replay engine, and the versioned WebSocket backend. The frontend is intentionally deferred to the next reviewed checkpoint.
 
 ## Requirements
 
@@ -75,7 +75,15 @@ The backend service exposes each row as a read-only `{ symbol, cashToken, future
 
 Quote state remains in memory and in integer paise. A zero bid or ask becomes unavailable (`null`); LTP remains an integer paise value. A quote replaces prior state only when its timestamp is newer, or when it occurs later in the same source file with an equal timestamp. Buy Spread is Future Bid minus Stock Ask, and Sell Spread is Stock Bid minus Future Ask; either result is `null` when an input is unavailable.
 
-The engine retains all 228 rows throughout replay and after completion. It is not started by HTTP yet: Component 5 will connect it to the first WebSocket client and publish snapshots and one-second deltas.
+The engine retains all 228 rows throughout replay and after completion. It starts once, globally, when the first WebSocket client connects.
+
+## WebSocket stream
+
+Connect to `ws://localhost:3000/ws` by default. Every connection immediately receives a full 228-row snapshot and the current replay status. The first connection starts the single replay; additional or reconnected clients never start another replay.
+
+Changed rows are coalesced by symbol and published in sequence-numbered deltas once per second. Any remaining changes are flushed immediately before `complete`, and the final snapshot remains available to later connections. Status values are `waiting`, `running`, `complete`, and `error`.
+
+Protocol prices are converted from internal paise to rupees. See [the committed WebSocket protocol](docs/WEBSOCKET_PROTOCOL.md) for the exact version 1 message schemas, sequencing rules, reconnect behavior, and null handling.
 
 ## Container workflow
 
@@ -115,6 +123,5 @@ See [the project specification](docs/PROJECT_SPEC.md) for the approved nine-comp
 
 ## Current limitations
 
-- No WebSocket server, client-triggered replay lifecycle, or one-second publication.
 - No React/AG Grid frontend.
 - No order execution or trading functionality is present or planned.

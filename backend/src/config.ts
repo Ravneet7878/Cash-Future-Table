@@ -47,6 +47,10 @@ const environmentSchema = z.object({
   NSE_CM_MARKET_DATA_FILE: fileNameSchema.default('nsecm_market_data.csv'),
   NSE_FO_MARKET_DATA_FILE: fileNameSchema.default('nsefo_market_data.csv'),
   REPLAY_BATCH_SIZE: z.coerce.number().int().min(1).max(10_000).default(500),
+  WEBSOCKET_PATH: z
+    .string()
+    .regex(/^\/[a-zA-Z0-9/_-]*$/u)
+    .default('/ws'),
   DB_POOL_MAX: z.coerce.number().int().positive().default(10),
   DB_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),

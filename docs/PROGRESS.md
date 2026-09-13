@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Component 4 — market replay engine (implemented and verified on 2026-09-13). Stop before Component 5 pending user review.
+Component 5 — WebSocket backend (implemented and verified on 2026-09-13). Stop before Component 6 pending user review.
 
 ## Component 1 review corrections
 
@@ -46,7 +46,20 @@ Component 4 — market replay engine (implemented and verified on 2026-09-13). S
 - Exposes immutable 228-row snapshots and changed rows while retaining the final state after both workers finish.
 - Validates traversal-safe market-data filenames and a replay batch size from 1 through 10,000.
 - Keeps `backend/src/config.ts` as the single validated backend configuration boundary and only production reader of `process.env`. Contract import and replay use its typed path resolvers rather than assembling independent configuration.
-- Keeps the ignored `.env` and tracked `.env.example` variable-name sets synchronized at 17 entries; the example contains blank secret placeholders only.
+- Keeps the ignored `.env` and tracked `.env.example` variable-name sets synchronized; the example contains blank secret placeholders only.
+
+## Component 5 behavior
+
+- Adds the exact-version `ws` runtime and TypeScript declaration dependencies and exposes protocol version 1 at configurable `WEBSOCKET_PATH` (`/ws` by default).
+- Sends every newly connected client a complete 228-row snapshot followed by the current replay status and data sequence.
+- Starts the one global replay when the first client connects. Later clients and reconnects reuse the same running or completed engine and never restart it.
+- Coalesces changed rows by symbol between publications and emits complete row upserts in monotonically increasing deltas once per second.
+- Converts internal integer paise to protocol rupees while preserving unavailable values as JSON `null`.
+- Flushes pending changes immediately before `complete` or `error`, then clears the publication timer.
+- Retains the completed 228-row state and final sequence for every later connection.
+- Publishes `waiting`, `running`, `complete`, and `error` statuses with a safe diagnostic on error.
+- Terminates replay workers and WebSocket clients during graceful backend shutdown.
+- Commits the full endpoint, row shape, message schemas, sequencing, reconnect rules, null behavior, and lifecycle contract in `docs/WEBSOCKET_PROTOCOL.md`.
 
 ## Verification evidence
 
@@ -72,15 +85,18 @@ Component 4 — market replay engine (implemented and verified on 2026-09-13). S
 - Full supplied market replay processed 8,392,467 NSECM rows and 20,337,884 NSEFO rows in 15.328 seconds. It matched 1,629,642 cash rows and 1,667,989 future rows across 3,260 and 3,336 batches respectively; neither worker exceeded 500 rows per batch.
 - Main-thread responsiveness check: all 15 expected one-second timer ticks fired during the 15.328-second full replay. Peak process RSS was 230 MiB while processing approximately 931 MiB of source data, demonstrating memory usage bounded independently of file size.
 - Final supplied-data snapshot: 228 retained rows, 228 stock LTPs, 210 future LTPs, 210 Buy Spreads, and 209 Sell Spreads. The 18 `NSETEST` rows remained present without future quotes.
-- Configuration and secret audit: `.env` is ignored and untracked; `.env` and `.env.example` have identical 17-variable key sets; only `backend/src/config.ts` reads `process.env`; tracked PostgreSQL URLs contain environment interpolation, an ellipsis placeholder, or credential-free localhost test values; no secret value is hardcoded in a tracked file.
+- Configuration and secret audit: `.env` is ignored and untracked; `.env` and `.env.example` have identical 18-variable key sets; only `backend/src/config.ts` reads `process.env`; tracked PostgreSQL URLs contain environment interpolation, an ellipsis placeholder, or credential-free localhost test values; no secret value is hardcoded in a tracked file.
 - `docker compose config --quiet` passed; the backend image rebuilt from the checkpoint source and the PostgreSQL and backend services both reported healthy.
+- Component 5 database-enabled `pnpm check`: formatting, lint, strict typecheck, all 13 test files and all 42 tests, and the production build passed. New integration coverage verifies first-client-only replay start, 228-row snapshots, running reconnects, one-second coalescing, monotonic sequence numbers, immediate final/error flushes, retained final snapshots, and paise-to-rupee conversion.
+- Live Docker WebSocket replay: initial snapshot contained 228 rows; statuses arrived as `waiting`, `running`, and `complete`; 35 consecutive deltas were received over 34.842 seconds (34 interval publications plus the immediate final flush).
+- Live final WebSocket state contained 228 stock rows, 210 future LTPs, 210 Buy Spreads, and 209 Sell Spreads. A new post-completion connection received sequence 35, `complete`, and a snapshot identical to the state reconstructed from the initial snapshot and all deltas.
+- Live worker completion logs retained the verified Component 4 counts: 8,392,467 NSECM source rows and 20,337,884 NSEFO source rows, with maximum batches of 500.
 - Repeat-import integration check: backend restart re-imported 5,080 contracts; ordered dataset digest remained `2fd6cb53bda88b15263ea81aa1e59846` before and after.
 - Failure integration check: an isolated backend with an intentionally missing cash filename exited with a filename/line startup error; the prior PostgreSQL count and digest remained unchanged, and the primary backend stayed ready.
 - Secret policy: `.env` is ignored and untracked; tracked configuration uses environment interpolation and contains no credential-bearing connection URL, private key, or common API-token literal.
 
 ## Deliberately deferred
 
-- WebSocket protocol, replay lifecycle, snapshots, and one-second deltas.
 - React/Vite/AG Grid frontend and the five-column table.
 - Complete three-service Docker integration and final end-to-end QA.
 - Order execution and trading functionality are not implemented and are not part of the project.

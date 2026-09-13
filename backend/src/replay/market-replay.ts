@@ -43,6 +43,7 @@ export function createMarketReplayEngine(
 export class MarketReplayEngine {
   readonly #state: QuoteStateStore;
   readonly #options: MarketReplayOptions;
+  readonly #workers = new Set<Worker>();
   #started = false;
 
   public constructor(
@@ -73,9 +74,15 @@ export class MarketReplayEngine {
       ]);
       return Object.freeze({ cash, future });
     } catch (error) {
-      await Promise.allSettled(workers.map((worker) => worker.terminate()));
+      await this.stop();
       throw error;
     }
+  }
+
+  public async stop(): Promise<void> {
+    const workers = [...this.#workers];
+    this.#workers.clear();
+    await Promise.allSettled(workers.map((worker) => worker.terminate()));
   }
 
   #createWorker(market: ContractMarket, filePath: string): Worker {
@@ -85,9 +92,17 @@ export class MarketReplayEngine {
       selectedTokens: this.#state.selectedTokens(market),
       batchSize: this.#options.batchSize,
     };
-    return new Worker(new URL('./market-data-worker.js', import.meta.url), {
-      workerData: input,
+    const worker = new Worker(
+      new URL('./market-data-worker.js', import.meta.url),
+      {
+        workerData: input,
+      },
+    );
+    this.#workers.add(worker);
+    worker.once('exit', () => {
+      this.#workers.delete(worker);
     });
+    return worker;
   }
 
   async #consumeWorker(

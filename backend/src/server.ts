@@ -7,13 +7,16 @@ import { loadContractUniverse } from './contract-universe.js';
 import { createDatabase } from './database.js';
 import { startHttpServer } from './http-server.js';
 import { createLogger } from './logger.js';
+import { MarketWebSocketService } from './market-websocket.js';
 import { runMigrations } from './migrations.js';
+import { createMarketReplayEngine } from './replay/market-replay.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
   const logger = createLogger(config);
   const database = createDatabase(config);
   let server: Server | undefined;
+  let marketWebSocket: MarketWebSocketService | undefined;
   let shuttingDown = false;
 
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
@@ -28,6 +31,7 @@ async function main(): Promise<void> {
     forceExitTimer.unref();
 
     try {
+      await marketWebSocket?.close();
       if (server !== undefined) {
         await new Promise<void>((resolve, reject) => {
           server?.close((error) => (error ? reject(error) : resolve()));
@@ -54,7 +58,21 @@ async function main(): Promise<void> {
     logger.info({ rows: contractUniverse.length }, 'contract universe loaded');
     const app = createApp({ database, logger });
     server = await startHttpServer(app, config.PORT, config.HOST);
-    logger.info({ host: config.HOST, port: config.PORT }, 'server listening');
+    marketWebSocket = new MarketWebSocketService({
+      server,
+      path: config.WEBSOCKET_PATH,
+      logger,
+      createReplayEngine: (onRowsChanged) =>
+        createMarketReplayEngine(contractUniverse, config, onRowsChanged),
+    });
+    logger.info(
+      {
+        host: config.HOST,
+        port: config.PORT,
+        webSocketPath: config.WEBSOCKET_PATH,
+      },
+      'server listening',
+    );
   } catch (error) {
     logger.fatal({ err: error }, 'backend startup failed');
     await database.end().catch(() => undefined);

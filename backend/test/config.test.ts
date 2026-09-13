@@ -22,6 +22,7 @@ describe('loadConfig', () => {
     expect(config.NSE_CM_MARKET_DATA_FILE).toBe('nsecm_market_data.csv');
     expect(config.NSE_FO_MARKET_DATA_FILE).toBe('nsefo_market_data.csv');
     expect(config.REPLAY_BATCH_SIZE).toBe(500);
+    expect(config.WEBSOCKET_PATH).toBe('/ws');
   });
 
   it('rejects an invalid database protocol', () => {

@@ -104,7 +104,7 @@ Use symbol as the stable row ID. Apply deltas through AG Grid transactions. Form
 - The grid has exactly the five specified columns.
 - Review checkpoint after every component.
 
-## Current Component 4 runtime contract
+## Current Component 5 runtime contract
 
 Configuration is validated before startup. `DATA_DIR` must be absolute, and contract filenames must be plain filenames without directory traversal. Startup runs checksum-protected migrations, parses both files, atomically replaces both stored market segments in bounded batches, and starts HTTP only after import commits. Logs report counts without the external directory path.
 
@@ -118,8 +118,12 @@ The market replay engine creates one NSECM worker and one NSEFO worker. Each str
 
 The main thread retains quote state for exactly the contract universe. Prices remain integer paise, zero bid or ask is `null`, newer timestamps replace older state, and later source rows win equal timestamps. Buy Spread is Future Bid minus Stock Ask; Sell Spread is Stock Bid minus Future Ask; both propagate unavailable inputs to `null`. The final state remains queryable from the engine after both workers complete.
 
+The backend exposes protocol version 1 at configurable `WEBSOCKET_PATH` (`/ws` by default). Every connection receives a full 228-row snapshot followed by the current replay status. The first connection starts the only global replay. Changed rows are coalesced by symbol and emitted as monotonically sequenced deltas once per second; completion and error both flush pending changes immediately before their terminal status. Protocol values are rupees converted from internal paise.
+
+The status lifecycle is `waiting`, `running`, then `complete` or `error`. The completed state and latest sequence are retained for reconnecting clients. Exact schemas and client sequencing behavior are committed in `docs/WEBSOCKET_PROTOCOL.md`.
+
 Secrets exist only in ignored `.env` or deployment secret injection. `.env.example`, Compose, source, tests, and documentation contain no real credentials.
 
-## Component 4 exclusions
+## Component 5 exclusions
 
-Component 4 does not start replay from an HTTP or WebSocket client, schedule one-second publications, define the WebSocket protocol, or add frontend code. Those lifecycle and transport responsibilities begin in Component 5.
+Component 5 does not add frontend code, AG Grid, browser-side reconnection logic, or sequence-gap recovery. Those client responsibilities begin in Components 6 and 7.
