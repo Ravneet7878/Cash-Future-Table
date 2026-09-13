@@ -1,6 +1,6 @@
 # Cash–Future Table
 
-Components 1–6 provide the complete backend pipeline plus an independent React/Vite frontend foundation. The responsive Basis dashboard consumes the versioned WebSocket stream, validates every message, replaces authoritative snapshots, applies sequenced deltas, and reconnects safely. The AG Grid market table remains isolated to the next reviewed checkpoint.
+Components 1–7 provide the complete backend pipeline and a professional React/Vite market-data interface. The responsive Basis dashboard consumes the versioned WebSocket stream, validates every message, replaces authoritative snapshots, applies sequenced deltas, reconnects safely, and presents the full contract universe in AG Grid Community.
 
 ## Requirements
 
@@ -86,11 +86,13 @@ Changed rows are coalesced by symbol and published in sequence-numbered deltas o
 
 Protocol prices are converted from internal paise to rupees. See [the committed WebSocket protocol](docs/WEBSOCKET_PROTOCOL.md) for the exact version 1 message schemas, sequencing rules, reconnect behavior, and null handling.
 
-## Frontend foundation
+## Frontend application
 
 Open `http://localhost:5173` during local development. The responsive Basis dashboard reports connection and replay state, contract and quote coverage, the latest sequence, and safe transport diagnostics. It uses the committed protocol rather than importing backend implementation code.
 
 The client rejects malformed messages and unsupported protocol versions. A full snapshot replaces all local rows; only the next sequence delta is applied. Stale deltas are ignored, while a missing snapshot, sequence gap, invalid message, or interrupted socket triggers an exponential reconnect and obtains a fresh authoritative snapshot. The reconnect delay begins at 500 ms and caps at eight seconds.
+
+The table retains all 228 symbols and displays exactly Symbol, Stock LTP, Future LTP, Buy Spread, and Sell Spread. Symbol is the stable AG Grid row ID. Snapshots replace the authoritative row set; one-second deltas update only their changed symbols through grid transactions. Columns support sorting, typed filters, resizing, responsive flex sizing, and a symbol quick search. Numeric values use two decimal places, while unavailable values remain an em dash.
 
 ## Container workflow
 
@@ -130,5 +132,6 @@ See [the project specification](docs/PROJECT_SPEC.md) for the approved nine-comp
 
 ## Current limitations
 
-- The React frontend foundation is complete; the five-column AG Grid table begins in Component 7.
+- The frontend is not yet included in Docker Compose; that integration begins in Component 8.
+- The AG Grid Community production bundle is approximately 1.57 MB before gzip (446 kB gzip); bundle splitting remains an optimization opportunity.
 - No order execution or trading functionality is present or planned.

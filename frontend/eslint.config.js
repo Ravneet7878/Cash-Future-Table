@@ -13,7 +13,9 @@ export default defineConfig(
         projectService: {
           allowDefaultProject: ['eslint.config.js'],
         },
-        tsconfigRootDir: new URL('.', import.meta.url).pathname,
+        tsconfigRootDir: decodeURIComponent(
+          new URL('.', import.meta.url).pathname,
+        ),
       },
     },
     rules: {

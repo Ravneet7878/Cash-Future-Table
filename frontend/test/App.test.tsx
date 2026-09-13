@@ -1,5 +1,9 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../src/MarketTable', () => ({
+  MarketTable: () => <div data-testid="market-table" />,
+}));
 
 import { Dashboard } from '../src/App';
 import {
@@ -48,6 +52,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('12')).toBeTruthy();
     expect(screen.getAllByText('1 / 228')).toHaveLength(3);
     expect(screen.getByText(/No order execution/u)).toBeTruthy();
+    expect(screen.getByTestId('market-table')).toBeTruthy();
   });
 
   it('shows a reconnect diagnostic without discarding the dashboard', () => {

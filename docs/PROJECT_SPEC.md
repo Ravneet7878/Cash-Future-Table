@@ -104,7 +104,7 @@ Use symbol as the stable row ID. Apply deltas through AG Grid transactions. Form
 - The grid has exactly the five specified columns.
 - Review checkpoint after every component.
 
-## Current Component 6 runtime contract
+## Current Component 7 runtime contract
 
 Configuration is validated before startup. `DATA_DIR` must be absolute, and contract filenames must be plain filenames without directory traversal. Startup runs checksum-protected migrations, parses both files, atomically replaces both stored market segments in bounded batches, and starts HTTP only after import commits. Logs report counts without the external directory path.
 
@@ -128,8 +128,12 @@ Every WebSocket payload is parsed and validated at runtime. A 228-row snapshot a
 
 The responsive Basis dashboard exposes connection and replay status, coverage summaries, the current sequence, safe diagnostics, and the explicit read-only/no-order-execution boundary. The underlying state is tested independently before AG Grid is introduced.
 
+AG Grid Community 36.1 renders exactly Symbol, Stock LTP, Future LTP, Buy Spread, and Sell Spread. Symbol is the stable row ID used for transaction matching. An authoritative snapshot replaces the complete grid row set; each subsequent accepted WebSocket delta is passed directly to `applyTransaction` as an update containing only changed rows. The underlying client map continues to retain every one of the 228 symbols, including rows with unavailable future quotes.
+
+All five columns are sortable, filterable, resizable, and flex-sized with minimum widths for responsive horizontal overflow. A symbol quick filter complements the typed floating column filters. Prices and spreads are formatted in rupees with exactly two decimals, and `null` is displayed as an em dash. Positive and negative spreads receive restrained semantic color while preserving the numeric value.
+
 Secrets exist only in ignored `.env` or deployment secret injection. `.env.example`, Compose, source, tests, and documentation contain no real credentials.
 
-## Component 6 exclusions
+## Component 7 exclusions
 
-Component 6 does not add AG Grid, the final five-column market table, or containerize the frontend. Those responsibilities begin in Components 7 and 8.
+Component 7 does not containerize the frontend or perform Playwright end-to-end QA. Those responsibilities begin in Components 8 and 9.

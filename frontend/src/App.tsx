@@ -1,6 +1,5 @@
 import {
   Activity,
-  ArrowUpRight,
   Check,
   CircleAlert,
   Clock3,
@@ -13,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import type { ConnectionStatus, MarketState } from './market-state';
+import { MarketTable } from './MarketTable';
 import type { ReplayStatus } from './protocol';
 import { useMarketStream } from './use-market-stream';
 
@@ -210,31 +210,7 @@ export function Dashboard({ state }: Readonly<{ state: MarketState }>) {
           </article>
         </section>
 
-        <section className="table-preview" aria-labelledby="table-title">
-          <div className="preview-copy">
-            <span className="eyebrow dark-eyebrow">Next workspace</span>
-            <h2 id="table-title">The market table is ready for its grid.</h2>
-            <p>
-              Snapshot replacement, keyed row updates, sequence-gap recovery,
-              and reconnect handling are active. The interactive five-column AG
-              Grid surface arrives in the next reviewed component.
-            </p>
-          </div>
-          <div className="preview-visual" aria-hidden="true">
-            <div className="preview-header">
-              <i /> <i /> <i /> <i /> <i />
-            </div>
-            {[82, 66, 91, 74].map((width, index) => (
-              <div className="preview-row" key={width}>
-                <span style={{ width: `${String(width)}%` }} />
-                <em>{String(index + 1).padStart(2, '0')}</em>
-              </div>
-            ))}
-            <span className="preview-badge">
-              <ArrowUpRight size={15} /> Live deltas
-            </span>
-          </div>
-        </section>
+        <MarketTable state={state} />
       </main>
 
       <footer>

@@ -6,6 +6,12 @@ export type ConnectionStatus =
   | 'reconnecting'
   | 'offline';
 
+export type MarketChange = Readonly<{
+  kind: 'snapshot' | 'delta';
+  rows: readonly MarketRow[];
+  sequence: number;
+}>;
+
 export type MarketState = Readonly<{
   connection: ConnectionStatus;
   replay: ReplayStatus;
@@ -15,6 +21,7 @@ export type MarketState = Readonly<{
   reconnectAttempt: number;
   notice: string | null;
   updatedAt: number | null;
+  lastChange: MarketChange | null;
 }>;
 
 export type MessageResult = Readonly<{
@@ -32,6 +39,7 @@ export function createInitialMarketState(): MarketState {
     reconnectAttempt: 0,
     notice: null,
     updatedAt: null,
+    lastChange: null,
   });
 }
 
@@ -50,6 +58,11 @@ export function applyServerMessage(
         hasSnapshot: true,
         notice: null,
         updatedAt: now,
+        lastChange: Object.freeze({
+          kind: 'snapshot',
+          rows: message.rows,
+          sequence: message.sequence,
+        }),
       }),
     };
   }
@@ -77,6 +90,11 @@ export function applyServerMessage(
         sequence: message.sequence,
         notice: null,
         updatedAt: now,
+        lastChange: Object.freeze({
+          kind: 'delta',
+          rows: message.rows,
+          sequence: message.sequence,
+        }),
       }),
     };
   }

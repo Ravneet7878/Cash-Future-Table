@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Component 6 — frontend foundation (implemented and verified on 2026-09-13). Stop before Component 7 pending user review.
+Component 7 — AG Grid table (implemented and verified on 2026-09-13). Stop before Component 8 pending user review.
 
 ## Component 1 review corrections
 
@@ -74,6 +74,17 @@ Component 6 — frontend foundation (implemented and verified on 2026-09-13). St
 - Keeps AG Grid and the final five-column market table out of this checkpoint so frontend state handling is verified independently first.
 - Updates root workspace commands so formatting, lint, type checks, tests, and builds cover both backend and frontend applications.
 
+## Component 7 behavior
+
+- Adds exact-version AG Grid Community and React 36.1 dependencies, registered through the React-scoped Community module provider with no Enterprise modules or license requirement.
+- Replaces the Component 6 table preview with a polished live grid containing exactly Symbol, Stock LTP, Future LTP, Buy Spread, and Sell Spread.
+- Uses `symbol` as the stable AG Grid row ID and retains the authoritative 228-row client map, including all symbols whose future values remain unavailable.
+- Records the last accepted snapshot or delta in frontend state. Snapshots replace the grid row set; deltas call `applyTransaction` with only the changed complete-row upserts.
+- Formats every numeric market value in rupees with exactly two decimals and renders `null` as an em dash.
+- Enables sorting, typed text/number filtering, floating filters, column resizing, responsive flex sizing with minimum widths, and a symbol quick search.
+- Adds tabular numeric alignment, restrained positive/negative spread styling, cell-change flash, loading state, row count, missing-value guidance, responsive controls, and keyboard-visible native inputs.
+- Corrects frontend ESLint path resolution for workspace paths containing spaces by decoding the configuration URL before passing it to the TypeScript project service.
+
 ## Verification evidence
 
 - `pnpm format:check`: passed.
@@ -108,14 +119,19 @@ Component 6 — frontend foundation (implemented and verified on 2026-09-13). St
 - Frontend tests cover protocol rejection, 228-row snapshot replacement, exact-next and stale delta behavior, sequence-gap recovery, replay status, URL validation, exponential reconnect, malformed-message reconnect, and rendered connection/replay/coverage states.
 - Vite production output: 0.65 kB HTML, 10.10 kB CSS (3.08 kB gzip), and 453.27 kB JavaScript (137.07 kB gzip).
 - Live local DOM verification against the running backend reported 228 universe rows, 228 cash LTPs, 210 future LTPs, active one-second sequences, a live connection, and running replay status.
+- Component 7 frontend verification: strict typecheck and production build passed; all six frontend test files and all 24 tests passed; standalone ESLint passed with zero errors or warnings.
+- New grid tests verify the exact five-column contract, per-column filters, global sort/resize/floating-filter defaults, stable symbol row IDs, two-decimal and em-dash formatting, full snapshot replacement, and delta-only AG Grid transactions.
+- Component 7 Vite production output: 0.65 kB HTML, 10.76 kB CSS (3.28 kB gzip), and 1,566.66 kB JavaScript (446.44 kB gzip). The current Community bundle-size warning is documented as a non-blocking optimization opportunity.
+- Component 7 full workspace check: formatting, backend/frontend lint, strict type checks, 42 backend tests (40 passed and two environment-gated tests skipped), all 24 frontend tests, and both production builds passed. The network-enabled rerun was required only so existing backend integration tests could bind ephemeral localhost ports.
+- Component 7 configuration audit: `.env` remains ignored and untracked; its variable-name digest exactly matches `.env.example`; no new configuration variables were introduced; only the central backend and frontend config modules read their respective environment APIs; and the tracked secret-pattern scan returned no matches.
 - Repeat-import integration check: backend restart re-imported 5,080 contracts; ordered dataset digest remained `2fd6cb53bda88b15263ea81aa1e59846` before and after.
 - Failure integration check: an isolated backend with an intentionally missing cash filename exited with a filename/line startup error; the prior PostgreSQL count and digest remained unchanged, and the primary backend stayed ready.
 - Secret policy: `.env` is ignored and untracked; tracked configuration uses environment interpolation and contains no credential-bearing connection URL, private key, or common API-token literal.
 
 ## Deliberately deferred
 
-- AG Grid and the final five-column market table.
-- Complete three-service Docker integration and final end-to-end QA.
+- Complete three-service Docker integration.
+- Playwright and final end-to-end QA.
 - Order execution and trading functionality are not implemented and are not part of the project.
 
 ## Operational note

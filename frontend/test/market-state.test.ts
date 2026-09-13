@@ -29,6 +29,11 @@ describe('market state', () => {
     expect(second.state.rows.has('SYMBOL000')).toBe(false);
     expect(second.state.rows.get('REPLACED')?.stockLtp).toBe(101.25);
     expect(second.state.updatedAt).toBe(20);
+    expect(second.state.lastChange).toMatchObject({
+      kind: 'snapshot',
+      sequence: 8,
+    });
+    expect(second.state.lastChange?.rows).toBe(replacement.rows);
   });
 
   it('applies only the next delta and ignores stale deltas', () => {
@@ -50,6 +55,7 @@ describe('market state', () => {
     });
 
     expect(next.state.rows.get('SYMBOL000')?.futureLtp).toBe(205.4);
+    expect(next.state.lastChange).toMatchObject({ kind: 'delta', sequence: 1 });
     expect(stale.state).toBe(next.state);
   });
 
